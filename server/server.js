@@ -6,10 +6,7 @@ import dotenv from 'dotenv'
 dotenv.config()
 
 const app = express()
-app.use(cors({
-  origin: ['https://monkey-qx1m.onrender.com', 'http://localhost:5173'],
-  credentials: true
-}))
+app.use(cors()) // Allow all origins for now
 app.use(express.json())
 
 // MongoDB Connection
