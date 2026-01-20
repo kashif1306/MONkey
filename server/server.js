@@ -66,6 +66,7 @@ const resourceSchema = new mongoose.Schema({
   url: { type: String, required: true },
   description: String,
   category: { type: String, default: 'Other' },
+  fileType: { type: String, default: 'link' }, // 'link' or 'file'
   createdAt: { type: Date, default: Date.now }
 })
 
@@ -347,6 +348,25 @@ app.get('/api/messages/unread/:username', async (req, res) => {
     res.status(500).json({ error: error.message })
   }
 })
+
+// Auto-cleanup old messages (older than 7 days)
+const cleanupOldMessages = async () => {
+  try {
+    const sevenDaysAgo = new Date()
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+    const result = await Message.deleteMany({ timestamp: { $lt: sevenDaysAgo } })
+    if (result.deletedCount > 0) {
+      console.log(`🗑️  Cleaned up ${result.deletedCount} old messages`)
+    }
+  } catch (error) {
+    console.error('Error cleaning up messages:', error)
+  }
+}
+
+// Run cleanup every 24 hours
+setInterval(cleanupOldMessages, 24 * 60 * 60 * 1000)
+// Run cleanup on startup
+cleanupOldMessages()
 
 app.delete('/api/messages/:id', async (req, res) => {
   try {

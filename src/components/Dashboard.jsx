@@ -1,20 +1,33 @@
 import { useState, useEffect } from 'react'
 import { api } from '../utils/api'
 import { getTodayString, getDaysUntilWeekEnd } from '../utils/dateUtils'
-import confetti from 'canvas-confetti'
 
 function Dashboard({ username }) {
   const [tasks, setTasks] = useState([])
   const [completions, setCompletions] = useState([])
   const [leaderboard, setLeaderboard] = useState([])
+  const [userProfiles, setUserProfiles] = useState({})
   const [daysRemaining, setDaysRemaining] = useState(0)
   const [unreadCount, setUnreadCount] = useState(0)
 
   useEffect(() => {
     loadDashboard()
-    const interval = setInterval(loadDashboard, 3000)
+    requestNotificationPermission()
+    const interval = setInterval(loadDashboard, 5000)
     return () => clearInterval(interval)
   }, [username])
+
+  const requestNotificationPermission = async () => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      await Notification.requestPermission()
+    }
+  }
+
+  const showNotification = (title, body) => {
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification(title, { body, icon: '/favicon.ico' })
+    }
+  }
 
   const loadDashboard = async () => {
     try {
@@ -27,7 +40,22 @@ function Dashboard({ username }) {
       const leaderboardData = await api.getLeaderboard(username)
       setLeaderboard(leaderboardData)
 
+      // Load profile pictures
+      for (const user of leaderboardData) {
+        if (!userProfiles[user.username]) {
+          try {
+            const profile = await api.getUser(user.username)
+            setUserProfiles(prev => ({ ...prev, [user.username]: profile }))
+          } catch (err) {
+            console.error('Error loading profile:', err)
+          }
+        }
+      }
+
       const unreadData = await api.getUnreadCount(username)
+      if (unreadData.count > unreadCount && unreadCount > 0) {
+        showNotification('New Message', `You have ${unreadData.count} unread messages`)
+      }
       setUnreadCount(unreadData.count)
 
       setDaysRemaining(getDaysUntilWeekEnd())
@@ -39,7 +67,14 @@ function Dashboard({ username }) {
   const toggleTask = async (taskId) => {
     try {
       const today = getTodayString()
+      const wasCompleted = isTaskCompleted(taskId)
       await api.toggleCompletion(username, taskId, today)
+      
+      if (!wasCompleted) {
+        const task = tasks.find(t => t._id === taskId)
+        showNotification('Task Completed!', `You earned ${task.points} points for "${task.name}"`)
+      }
+      
       loadDashboard()
     } catch (error) {
       console.error('Error toggling task:', error)
@@ -51,96 +86,146 @@ function Dashboard({ username }) {
     return completions.some(c => c.taskId === taskId && c.date === today)
   }
 
+  const getProfilePic = (user) => {
+    const pic = userProfiles[user]?.profilePic
+    if (pic && pic.startsWith('data:image')) {
+      return <img src={pic} alt={user} />
+    }
+    return pic || '👤'
+  }
+
+  const maxPoints = Math.max(...leaderboard.map(u => u.points), 1)
+
   return (
     <div className="container">
-      <div className="grid grid-2">
+      {/* Quick Stats */}
+      <div className="grid grid-2" style={{ marginBottom: '24px' }}>
         <div className="card">
-          <h2>🏆 Weekly Leaderboard</h2>
-          <p style={{ color: '#64748b', marginBottom: '16px' }}>
-            {daysRemaining} {daysRemaining === 1 ? 'day' : 'days'} until winner is declared
-          </p>
-          {leaderboard.length === 0 ? (
-            <p style={{ color: '#94a3b8' }}>No data yet. Complete tasks to earn points!</p>
-          ) : (
-            leaderboard.map((user, index) => (
-              <div key={user.username} className="leaderboard-item">
-                <div className={`rank rank-${index + 1}`}>#{index + 1}</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: '600' }}>{user.username}</div>
-                  {user.username === username && (
-                    <span className="badge badge-primary">You</span>
-                  )}
-                </div>
-                <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#667eea' }}>
-                  {user.points} pts
-                </div>
-              </div>
-            ))
-          )}
+          <h3 style={{ marginBottom: '20px' }}>Your Stats</h3>
+          <div className="profile-stats">
+            <div className="stat-card">
+              <div className="stat-value">{leaderboard.find(u => u.username === username)?.points || 0}</div>
+              <div className="stat-label">Week Points</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-value">{completions.filter(c => c.date === getTodayString()).length}</div>
+              <div className="stat-label">Today</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-value">{daysRemaining}</div>
+              <div className="stat-label">Days Left</div>
+            </div>
+          </div>
         </div>
 
         <div className="card">
-          <h2>✅ Today's Shared Tasks</h2>
-          <p style={{ fontSize: '14px', color: '#64748b', marginBottom: '16px' }}>
-            Complete these tasks to earn points!
-          </p>
-          {tasks.length === 0 ? (
-            <p style={{ color: '#94a3b8' }}>
-              No tasks yet. Go to <a href="/tasks" style={{ color: '#667eea' }}>My Tasks</a> to create some!
-            </p>
+          <h3 style={{ marginBottom: '20px' }}>Notifications</h3>
+          {unreadCount > 0 ? (
+            <div style={{ padding: '16px', background: 'var(--bg-tertiary)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+              <div style={{ fontSize: '24px', marginBottom: '8px' }}>💬</div>
+              <div style={{ fontWeight: '600', marginBottom: '4px' }}>{unreadCount} New Message{unreadCount !== 1 ? 's' : ''}</div>
+              <a href="/chatroom" style={{ color: 'var(--text-secondary)', fontSize: '14px', textDecoration: 'none' }}>
+                View in Chatroom →
+              </a>
+            </div>
           ) : (
-            tasks.map((task) => (
-              <div
-                key={task._id}
-                className={`task-item ${isTaskCompleted(task._id) ? 'task-completed' : ''}`}
-              >
-                <input
-                  type="checkbox"
-                  className="task-checkbox"
-                  checked={isTaskCompleted(task._id)}
-                  onChange={() => toggleTask(task._id)}
-                />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: '500' }}>{task.name}</div>
-                  <div style={{ fontSize: '12px', color: '#64748b' }}>
-                    {task.points} points • by {task.createdBy}
-                  </div>
-                </div>
-              </div>
-            ))
+            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
+              <div style={{ fontSize: '32px', marginBottom: '8px' }}>✓</div>
+              <div>All caught up!</div>
+            </div>
           )}
         </div>
       </div>
 
-      <div className="card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <h2 style={{ margin: 0 }}>📊 Quick Stats</h2>
-          {unreadCount > 0 && (
-            <a href="/chatroom" style={{ textDecoration: 'none' }}>
-              <div className="badge badge-unread">
-                {unreadCount} new message{unreadCount !== 1 ? 's' : ''}
+      {/* Main Content */}
+      <div className="dashboard-grid">
+        <div>
+          {/* Tasks */}
+          <div className="card">
+            <h2 style={{ marginBottom: '8px' }}>Today's Tasks</h2>
+            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '20px' }}>
+              Complete tasks to earn points and climb the leaderboard
+            </p>
+            {tasks.length === 0 ? (
+              <div className="empty-state">
+                <div style={{ fontSize: '48px', marginBottom: '12px' }}>📝</div>
+                <p>No tasks yet</p>
+                <a href="/tasks" style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Create your first task →</a>
               </div>
-            </a>
-          )}
+            ) : (
+              tasks.map((task) => (
+                <div
+                  key={task._id}
+                  className={`task-item ${isTaskCompleted(task._id) ? 'task-completed' : ''}`}
+                >
+                  <input
+                    type="checkbox"
+                    className="task-checkbox"
+                    checked={isTaskCompleted(task._id)}
+                    onChange={() => toggleTask(task._id)}
+                  />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: '500', marginBottom: '2px' }}>{task.name}</div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                      {task.points} points • by {task.createdBy}
+                    </div>
+                  </div>
+                  {isTaskCompleted(task._id) && (
+                    <span style={{ color: 'var(--success)', fontSize: '20px' }}>✓</span>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-          <div style={{ padding: '20px', background: 'var(--bg-tertiary)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
-            <div style={{ fontSize: '32px', fontWeight: 'bold', color: 'var(--neon-yellow)' }}>
-              {leaderboard.find(u => u.username === username)?.points || 0}
-            </div>
-            <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Your Week Points</div>
+
+        <div>
+          {/* Leaderboard */}
+          <div className="card">
+            <h2 style={{ marginBottom: '20px' }}>Leaderboard</h2>
+            {leaderboard.length === 0 ? (
+              <div className="empty-state">
+                <p>No data yet</p>
+              </div>
+            ) : (
+              leaderboard.map((user, index) => (
+                <div key={user.username} className="leaderboard-item">
+                  <div className={`rank rank-${index + 1}`}>#{index + 1}</div>
+                  <div className="leaderboard-avatar">
+                    {getProfilePic(user.username)}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: '600', fontSize: '14px' }}>{user.username}</div>
+                    {user.username === username && (
+                      <span className="badge badge-primary">You</span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: '16px', fontWeight: '700' }}>
+                    {user.points}
+                  </div>
+                </div>
+              ))
+            )}
           </div>
-          <div style={{ padding: '20px', background: 'var(--bg-tertiary)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
-            <div style={{ fontSize: '32px', fontWeight: 'bold', color: 'var(--neon-blue)' }}>
-              {completions.filter(c => c.date === getTodayString()).length}
+
+          {/* Performance Chart */}
+          <div className="card">
+            <h3 style={{ marginBottom: '20px' }}>Performance</h3>
+            <div className="chart-container">
+              {leaderboard.map((user) => (
+                <div key={user.username} className="chart-bar">
+                  <div className="chart-label">{user.username}</div>
+                  <div className="chart-bar-bg">
+                    <div 
+                      className="chart-bar-fill" 
+                      style={{ width: `${(user.points / maxPoints) * 100}%` }}
+                    >
+                      {user.points > 0 && user.points}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
-            <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Completed Today</div>
-          </div>
-          <div style={{ padding: '20px', background: 'var(--bg-tertiary)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
-            <div style={{ fontSize: '32px', fontWeight: 'bold', color: 'var(--success)' }}>
-              {daysRemaining}
-            </div>
-            <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Days Until Winner</div>
           </div>
         </div>
       </div>

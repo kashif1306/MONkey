@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { api } from '../utils/api'
 
 function Resources({ username }) {
@@ -8,11 +8,13 @@ function Resources({ username }) {
   const [url, setUrl] = useState('')
   const [description, setDescription] = useState('')
   const [category, setCategory] = useState('DSA')
+  const [fileType, setFileType] = useState('link')
+  const [fileData, setFileData] = useState(null)
   const [error, setError] = useState('')
+  const fileInputRef = useRef(null)
 
   useEffect(() => {
     loadResources()
-    // Refresh every 5 seconds
     const interval = setInterval(loadResources, 5000)
     return () => clearInterval(interval)
   }, [])
@@ -26,21 +28,35 @@ function Resources({ username }) {
     }
   }
 
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0]
+    if (file) {
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setFileData(reader.result)
+        setUrl(reader.result)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
   const addResource = async (e) => {
     e.preventDefault()
     setError('')
 
     if (!title || !url) {
-      setError('Title and URL are required')
+      setError('Title and URL/File are required')
       return
     }
 
     try {
-      await api.createResource({ title, url, description, category, username })
+      await api.createResource({ title, url, description, category, username, fileType })
       setTitle('')
       setUrl('')
       setDescription('')
       setCategory('DSA')
+      setFileType('link')
+      setFileData(null)
       setShowModal(false)
       loadResources()
     } catch (error) {
@@ -59,13 +75,18 @@ function Resources({ username }) {
     }
   }
 
-  const categories = ['DSA', 'Web Dev', 'Mobile', 'AI/ML', 'DevOps', 'Other']
+  const categories = ['DSA', 'Web Dev', 'Mobile', 'AI/ML', 'DevOps', 'Design', 'Other']
 
   return (
     <div className="container">
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-          <h2>📚 Learning Resources</h2>
+          <div>
+            <h2 style={{ marginBottom: '4px' }}>📚 Learning Resources</h2>
+            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: 0 }}>
+              Share helpful links, files, and learning materials
+            </p>
+          </div>
           <button onClick={() => setShowModal(true)} className="btn btn-primary">
             + Add Resource
           </button>
@@ -76,16 +97,19 @@ function Resources({ username }) {
           if (catResources.length === 0) return null
 
           return (
-            <div key={cat} style={{ marginBottom: '24px' }}>
-              <h3 style={{ color: '#667eea', marginBottom: '12px' }}>{cat}</h3>
-              <div className="grid grid-2">
+            <div key={cat} style={{ marginBottom: '32px' }}>
+              <h3 style={{ fontSize: '16px', marginBottom: '16px', color: 'var(--text-primary)' }}>{cat}</h3>
+              <div style={{ display: 'grid', gap: '12px' }}>
                 {catResources.map(resource => (
-                  <div key={resource._id} className="card" style={{ background: '#f8fafc' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+                  <div key={resource._id} className="resource-item">
+                    <div className="resource-header">
                       <div style={{ flex: 1 }}>
-                        <h4 style={{ marginBottom: '8px' }}>{resource.title}</h4>
+                        <div className="resource-title">
+                          {resource.fileType === 'file' ? '📎 ' : '🔗 '}
+                          {resource.title}
+                        </div>
                         {resource.description && (
-                          <p style={{ color: '#64748b', fontSize: '14px', marginBottom: '8px' }}>
+                          <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '8px' }}>
                             {resource.description}
                           </p>
                         )}
@@ -93,19 +117,18 @@ function Resources({ username }) {
                           href={resource.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          style={{ color: '#667eea', fontSize: '14px', textDecoration: 'none' }}
+                          className="resource-url"
                         >
-                          🔗 Visit Resource
+                          {resource.fileType === 'file' ? 'Download File' : 'Visit Link'} →
                         </a>
-                        <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '8px' }}>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '8px' }}>
                           Shared by {resource.username}
                         </div>
                       </div>
                       {resource.username === username && (
                         <button
                           onClick={() => deleteResource(resource._id)}
-                          className="btn btn-danger"
-                          style={{ padding: '4px 8px', fontSize: '12px' }}
+                          className="btn btn-danger btn-sm"
                         >
                           Delete
                         </button>
@@ -119,9 +142,11 @@ function Resources({ username }) {
         })}
 
         {resources.length === 0 && (
-          <p style={{ color: '#94a3b8', textAlign: 'center', padding: '40px' }}>
-            No resources yet. Be the first to share!
-          </p>
+          <div className="empty-state">
+            <div style={{ fontSize: '48px', marginBottom: '12px' }}>📚</div>
+            <p>No resources yet</p>
+            <span>Be the first to share!</span>
+          </div>
         )}
       </div>
 
@@ -132,23 +157,66 @@ function Resources({ username }) {
             {error && <div className="error">{error}</div>}
             <form onSubmit={addResource}>
               <div className="form-group">
+                <label>Type</label>
+                <div style={{ display: 'flex', gap: '12px', marginBottom: '12px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      value="link"
+                      checked={fileType === 'link'}
+                      onChange={(e) => setFileType(e.target.value)}
+                    />
+                    Link
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      value="file"
+                      checked={fileType === 'file'}
+                      onChange={(e) => setFileType(e.target.value)}
+                    />
+                    File
+                  </label>
+                </div>
+              </div>
+
+              <div className="form-group">
                 <label>Title</label>
                 <input
                   type="text"
-                  placeholder="e.g., LeetCode"
+                  placeholder="e.g., LeetCode Solutions"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                 />
               </div>
-              <div className="form-group">
-                <label>URL</label>
-                <input
-                  type="url"
-                  placeholder="https://..."
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                />
-              </div>
+
+              {fileType === 'link' ? (
+                <div className="form-group">
+                  <label>URL</label>
+                  <input
+                    type="url"
+                    placeholder="https://..."
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                  />
+                </div>
+              ) : (
+                <div className="form-group">
+                  <label>File</label>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    onChange={handleFileSelect}
+                    accept=".pdf,.doc,.docx,.txt,.zip,.png,.jpg,.jpeg"
+                  />
+                  {fileData && (
+                    <div style={{ fontSize: '13px', color: 'var(--success)', marginTop: '8px' }}>
+                      ✓ File selected
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="form-group">
                 <label>Description (optional)</label>
                 <textarea
@@ -158,18 +226,19 @@ function Resources({ username }) {
                   rows="3"
                 />
               </div>
+
               <div className="form-group">
                 <label>Category</label>
                 <select
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
-                  style={{ width: '100%', padding: '10px', border: '2px solid #e2e8f0', borderRadius: '6px' }}
                 >
                   {categories.map(cat => (
                     <option key={cat} value={cat}>{cat}</option>
                   ))}
                 </select>
               </div>
+
               <div style={{ display: 'flex', gap: '12px' }}>
                 <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
                   Add Resource
