@@ -330,12 +330,16 @@ app.get('/api/leaderboard/:username', async (req, res) => {
   }
 })
 
-const PORT = process.env.PORT || 3000
-
-// Test route
+// Test routes - MUST be before app.listen
 app.get('/api/test', (req, res) => {
   res.json({ message: 'Backend is working!', timestamp: new Date() })
 })
+
+app.get('/', (req, res) => {
+  res.json({ message: 'MONKey Backend API', status: 'running' })
+})
+
+const PORT = process.env.PORT || 3000
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`)
