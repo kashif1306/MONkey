@@ -34,6 +34,7 @@ mongoose.connect(MONGODB_URI)
 const userSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
   password: { type: String, required: true },
+  profilePic: { type: String, default: '' }, // URL or emoji
   createdAt: { type: Date, default: Date.now }
 })
 
@@ -104,7 +105,38 @@ app.post('/api/auth/login', async (req, res) => {
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' })
     }
-    res.json({ success: true, username })
+    res.json({ success: true, username, profilePic: user.profilePic })
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+// Update profile picture
+app.put('/api/users/:username/profile-pic', async (req, res) => {
+  try {
+    const { profilePic } = req.body
+    const user = await User.findOneAndUpdate(
+      { username: req.params.username },
+      { profilePic },
+      { new: true }
+    )
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+    res.json({ success: true, profilePic: user.profilePic })
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+// Get user profile
+app.get('/api/users/:username', async (req, res) => {
+  try {
+    const user = await User.findOne({ username: req.params.username })
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+    res.json({ username: user.username, profilePic: user.profilePic, createdAt: user.createdAt })
   } catch (error) {
     res.status(500).json({ error: error.message })
   }

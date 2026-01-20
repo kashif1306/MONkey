@@ -20,6 +20,21 @@ export const api = {
     return res.json()
   },
 
+  // User profile
+  getUser: async (username) => {
+    const res = await fetch(`${API_URL}/api/users/${username}`)
+    return res.json()
+  },
+
+  updateProfilePic: async (username, profilePic) => {
+    const res = await fetch(`${API_URL}/api/users/${username}/profile-pic`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ profilePic })
+    })
+    return res.json()
+  },
+
   // Tasks - SHARED FOR EVERYONE
   getTasks: async () => {
     const res = await fetch(`${API_URL}/api/tasks`)

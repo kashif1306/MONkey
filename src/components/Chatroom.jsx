@@ -4,11 +4,11 @@ import { api } from '../utils/api'
 function Chatroom({ username }) {
   const [messages, setMessages] = useState([])
   const [newMessage, setNewMessage] = useState('')
+  const [userProfiles, setUserProfiles] = useState({})
   const messagesEndRef = useRef(null)
 
   useEffect(() => {
     loadMessages()
-    // Refresh messages every 2 seconds
     const interval = setInterval(loadMessages, 2000)
     return () => clearInterval(interval)
   }, [])
@@ -25,6 +25,19 @@ function Chatroom({ username }) {
     try {
       const data = await api.getMessages()
       setMessages(data)
+      
+      // Load profile pics for all users
+      const uniqueUsers = [...new Set(data.map(m => m.username))]
+      for (const user of uniqueUsers) {
+        if (!userProfiles[user]) {
+          try {
+            const profile = await api.getUser(user)
+            setUserProfiles(prev => ({ ...prev, [user]: profile }))
+          } catch (err) {
+            console.error('Error loading profile:', err)
+          }
+        }
+      }
     } catch (error) {
       console.error('Error loading messages:', error)
     }
@@ -64,80 +77,83 @@ function Chatroom({ username }) {
     return date.toLocaleDateString()
   }
 
+  const getProfilePic = (user) => {
+    return userProfiles[user]?.profilePic || '🐵'
+  }
+
   return (
     <div className="container">
-      <div className="card" style={{ height: 'calc(100vh - 200px)', display: 'flex', flexDirection: 'column' }}>
-        <h2 style={{ marginBottom: '16px' }}>💬 Chatroom</h2>
+      <div className="chat-container">
+        <div className="chat-header">
+          <h2>💬 Team Chat</h2>
+          <span className="chat-status">🟢 {messages.length} messages</span>
+        </div>
         
-        <div style={{ flex: 1, overflowY: 'auto', marginBottom: '16px', padding: '16px', background: '#f8fafc', borderRadius: '8px' }}>
+        <div className="chat-messages">
           {messages.length === 0 ? (
-            <p style={{ color: '#94a3b8', textAlign: 'center', padding: '40px' }}>
-              No messages yet. Start the conversation!
-            </p>
+            <div className="empty-state">
+              <div className="empty-icon">💬</div>
+              <p>No messages yet</p>
+              <span>Start the conversation!</span>
+            </div>
           ) : (
-            messages.map((msg) => (
-              <div
-                key={msg._id}
-                style={{
-                  marginBottom: '16px',
-                  padding: '12px',
-                  background: msg.username === username ? '#dbeafe' : 'white',
-                  borderRadius: '8px',
-                  borderLeft: msg.username === username ? '3px solid #667eea' : '3px solid #e2e8f0'
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '4px' }}>
-                  <div>
-                    <span style={{ fontWeight: '600', color: '#1e293b' }}>
-                      {msg.username}
-                    </span>
-                    {msg.username === username && (
-                      <span className="badge badge-primary" style={{ marginLeft: '8px', fontSize: '10px' }}>
-                        You
-                      </span>
+            messages.map((msg, index) => {
+              const isOwn = msg.username === username
+              const showAvatar = index === 0 || messages[index - 1].username !== msg.username
+              
+              return (
+                <div key={msg._id} className={`message ${isOwn ? 'message-own' : 'message-other'}`}>
+                  {!isOwn && showAvatar && (
+                    <div className="message-avatar">{getProfilePic(msg.username)}</div>
+                  )}
+                  {!isOwn && !showAvatar && <div className="message-avatar-spacer"></div>}
+                  
+                  <div className="message-content">
+                    {showAvatar && (
+                      <div className="message-header">
+                        <span className="message-username">{msg.username}</span>
+                        <span className="message-time">{formatTime(msg.timestamp)}</span>
+                      </div>
                     )}
+                    <div className={`message-bubble ${isOwn ? 'bubble-own' : 'bubble-other'}`}>
+                      <p>{msg.message}</p>
+                      {isOwn && (
+                        <button
+                          onClick={() => deleteMessage(msg._id)}
+                          className="message-delete"
+                          title="Delete message"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '12px', color: '#94a3b8' }}>
-                      {formatTime(msg.timestamp)}
-                    </span>
-                    {msg.username === username && (
-                      <button
-                        onClick={() => deleteMessage(msg._id)}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: '#ef4444',
-                          cursor: 'pointer',
-                          fontSize: '12px',
-                          padding: '2px 6px'
-                        }}
-                      >
-                        Delete
-                      </button>
-                    )}
-                  </div>
+                  
+                  {isOwn && showAvatar && (
+                    <div className="message-avatar">{getProfilePic(msg.username)}</div>
+                  )}
+                  {isOwn && !showAvatar && <div className="message-avatar-spacer"></div>}
                 </div>
-                <div style={{ color: '#334155', wordBreak: 'break-word' }}>
-                  {msg.message}
-                </div>
-              </div>
-            ))
+              )
+            })
           )}
           <div ref={messagesEndRef} />
         </div>
 
-        <form onSubmit={sendMessage} style={{ display: 'flex', gap: '12px' }}>
-          <input
-            type="text"
-            placeholder="Type your message..."
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            style={{ flex: 1, marginBottom: 0 }}
-          />
-          <button type="submit" className="btn btn-primary">
-            Send
-          </button>
+        <form onSubmit={sendMessage} className="chat-input-form">
+          <div className="chat-input-wrapper">
+            <input
+              type="text"
+              placeholder="Type a message..."
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              className="chat-input"
+            />
+            <button type="submit" className="chat-send-btn" disabled={!newMessage.trim()}>
+              <span>Send</span>
+              <span className="send-icon">→</span>
+            </button>
+          </div>
         </form>
       </div>
     </div>
