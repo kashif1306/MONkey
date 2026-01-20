@@ -6,7 +6,21 @@ import dotenv from 'dotenv'
 dotenv.config()
 
 const app = express()
-app.use(cors()) // Allow all origins for now
+
+// CORS Configuration - Allow all origins
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*')
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+  
+  // Handle preflight
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200)
+  }
+  next()
+})
+
+app.use(cors())
 app.use(express.json())
 
 // MongoDB Connection
