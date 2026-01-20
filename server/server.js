@@ -34,7 +34,9 @@ mongoose.connect(MONGODB_URI)
 const userSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
   password: { type: String, required: true },
-  profilePic: { type: String, default: '' }, // URL or emoji
+  profilePic: { type: String, default: '' },
+  status: { type: String, default: 'offline' }, // online, offline, away
+  lastActive: { type: Date, default: Date.now },
   createdAt: { type: Date, default: Date.now }
 })
 
@@ -44,7 +46,12 @@ const taskSchema = new mongoose.Schema({
   recurrence: { type: String, default: 'daily' },
   createdBy: { type: String, required: true },
   createdAt: { type: Date, default: Date.now },
-  deleteVotes: [{ type: String }] // Array of usernames who voted to delete
+  deleteVotes: [{ type: String }],
+  comments: [{
+    username: String,
+    comment: String,
+    timestamp: { type: Date, default: Date.now }
+  }]
 })
 
 const completionSchema = new mongoose.Schema({
@@ -85,6 +92,17 @@ const Friend = mongoose.model('Friend', friendSchema)
 const Resource = mongoose.model('Resource', resourceSchema)
 const Message = mongoose.model('Message', messageSchema)
 
+// Activity Feed Schema
+const activitySchema = new mongoose.Schema({
+  username: { type: String, required: true },
+  action: { type: String, required: true }, // 'completed_task', 'created_task', 'added_resource', etc.
+  details: { type: String, required: true },
+  points: { type: Number, default: 0 },
+  timestamp: { type: Date, default: Date.now }
+})
+
+const Activity = mongoose.model('Activity', activitySchema)
+
 // Auth Routes
 app.post('/api/auth/signup', async (req, res) => {
   try {
@@ -108,7 +126,40 @@ app.post('/api/auth/login', async (req, res) => {
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' })
     }
+    // Update status to online
+    user.status = 'online'
+    user.lastActive = new Date()
+    await user.save()
     res.json({ success: true, username, profilePic: user.profilePic })
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+// Update user status
+app.post('/api/users/:username/status', async (req, res) => {
+  try {
+    const { status } = req.body
+    const user = await User.findOneAndUpdate(
+      { username: req.params.username },
+      { status, lastActive: new Date() },
+      { new: true }
+    )
+    res.json({ success: true, status: user.status })
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+// Get online users
+app.get('/api/users/online', async (req, res) => {
+  try {
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000)
+    const users = await User.find({
+      status: 'online',
+      lastActive: { $gte: fiveMinutesAgo }
+    }).select('username profilePic status')
+    res.json(users)
   } catch (error) {
     res.status(500).json({ error: error.message })
   }
@@ -159,7 +210,32 @@ app.post('/api/tasks', async (req, res) => {
   try {
     const task = new Task(req.body)
     await task.save()
+    
+    // Log activity
+    await Activity.create({
+      username: req.body.createdBy,
+      action: 'created_task',
+      details: `Created task: ${req.body.name}`,
+      points: 0
+    })
+    
     res.json(task)
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+// Add comment to task
+app.post('/api/tasks/:id/comments', async (req, res) => {
+  try {
+    const { username, comment } = req.body
+    const task = await Task.findById(req.params.id)
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' })
+    }
+    task.comments.push({ username, comment, timestamp: new Date() })
+    await task.save()
+    res.json({ success: true, comments: task.comments })
   } catch (error) {
     res.status(500).json({ error: error.message })
   }
@@ -224,8 +300,32 @@ app.post('/api/completions', async (req, res) => {
     } else {
       const completion = new Completion(req.body)
       await completion.save()
+      
+      // Get task details for activity
+      const task = await Task.findById(taskId)
+      if (task) {
+        await Activity.create({
+          username,
+          action: 'completed_task',
+          details: `Completed: ${task.name}`,
+          points: task.points
+        })
+      }
+      
       res.json({ success: true, action: 'added', completion })
     }
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+// Get activity feed
+app.get('/api/activity', async (req, res) => {
+  try {
+    const activities = await Activity.find()
+      .sort({ timestamp: -1 })
+      .limit(50)
+    res.json(activities)
   } catch (error) {
     res.status(500).json({ error: error.message })
   }

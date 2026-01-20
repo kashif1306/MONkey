@@ -159,5 +159,36 @@ export const api = {
   deleteMessage: async (id) => {
     const res = await fetch(`${API_URL}/api/messages/${id}`, { method: 'DELETE' })
     return res.json()
+  },
+
+  // Activity
+  getActivity: async () => {
+    const res = await fetch(`${API_URL}/api/activity`)
+    return res.json()
+  },
+
+  // User status
+  updateStatus: async (username, status) => {
+    const res = await fetch(`${API_URL}/api/users/${username}/status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status })
+    })
+    return res.json()
+  },
+
+  getOnlineUsers: async () => {
+    const res = await fetch(`${API_URL}/api/users/online`)
+    return res.json()
+  },
+
+  // Task comments
+  addTaskComment: async (taskId, username, comment) => {
+    const res = await fetch(`${API_URL}/api/tasks/${taskId}/comments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, comment })
+    })
+    return res.json()
   }
 }

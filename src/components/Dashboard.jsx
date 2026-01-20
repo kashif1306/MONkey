@@ -9,13 +9,27 @@ function Dashboard({ username }) {
   const [userProfiles, setUserProfiles] = useState({})
   const [daysRemaining, setDaysRemaining] = useState(0)
   const [unreadCount, setUnreadCount] = useState(0)
+  const [activities, setActivities] = useState([])
+  const [onlineUsers, setOnlineUsers] = useState([])
 
   useEffect(() => {
     loadDashboard()
     requestNotificationPermission()
-    const interval = setInterval(loadDashboard, 5000)
+    updateUserStatus()
+    const interval = setInterval(() => {
+      loadDashboard()
+      updateUserStatus()
+    }, 5000)
     return () => clearInterval(interval)
   }, [username])
+
+  const updateUserStatus = async () => {
+    try {
+      await api.updateStatus(username, 'online')
+    } catch (error) {
+      console.error('Error updating status:', error)
+    }
+  }
 
   const requestNotificationPermission = async () => {
     if ('Notification' in window && Notification.permission === 'default') {
@@ -57,6 +71,12 @@ function Dashboard({ username }) {
         showNotification('New Message', `You have ${unreadData.count} unread messages`)
       }
       setUnreadCount(unreadData.count)
+
+      const activityData = await api.getActivity()
+      setActivities(activityData.slice(0, 10))
+
+      const onlineData = await api.getOnlineUsers()
+      setOnlineUsers(onlineData)
 
       setDaysRemaining(getDaysUntilWeekEnd())
     } catch (error) {
@@ -226,6 +246,59 @@ function Dashboard({ username }) {
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* Online Users */}
+          <div className="card">
+            <h3 style={{ marginBottom: '16px' }}>Online Now ({onlineUsers.length})</h3>
+            {onlineUsers.length === 0 ? (
+              <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>No one online</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {onlineUsers.map(user => (
+                  <div key={user.username} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px', background: 'var(--bg-tertiary)', borderRadius: '8px' }}>
+                    <div className="leaderboard-avatar" style={{ width: '32px', height: '32px', margin: 0 }}>
+                      {user.profilePic && user.profilePic.startsWith('data:image') ? (
+                        <img src={user.profilePic} alt={user.username} />
+                      ) : (
+                        user.profilePic || '👤'
+                      )}
+                    </div>
+                    <div style={{ flex: 1, fontSize: '14px', fontWeight: '500' }}>{user.username}</div>
+                    <div className="online-indicator"></div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Activity Feed */}
+          <div className="card">
+            <h3 style={{ marginBottom: '16px' }}>Recent Activity</h3>
+            {activities.length === 0 ? (
+              <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>No recent activity</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {activities.map((activity, index) => (
+                  <div key={index} style={{ padding: '12px', background: 'var(--bg-tertiary)', borderRadius: '8px', borderLeft: '3px solid var(--accent)' }}>
+                    <div style={{ fontSize: '13px', fontWeight: '600', marginBottom: '4px' }}>
+                      {activity.username}
+                    </div>
+                    <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                      {activity.details}
+                      {activity.points > 0 && (
+                        <span style={{ color: 'var(--success)', marginLeft: '8px' }}>
+                          +{activity.points} pts
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                      {new Date(activity.timestamp).toLocaleTimeString()}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
