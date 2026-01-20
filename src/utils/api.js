@@ -133,12 +133,26 @@ export const api = {
     return res.json()
   },
 
-  sendMessage: async (username, message) => {
+  sendMessage: async (username, message, imageUrl = '') => {
     const res = await fetch(`${API_URL}/api/messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, message })
+      body: JSON.stringify({ username, message, imageUrl })
     })
+    return res.json()
+  },
+
+  markMessageRead: async (messageId, username) => {
+    const res = await fetch(`${API_URL}/api/messages/${messageId}/read`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username })
+    })
+    return res.json()
+  },
+
+  getUnreadCount: async (username) => {
+    const res = await fetch(`${API_URL}/api/messages/unread/${username}`)
     return res.json()
   },
 

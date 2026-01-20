@@ -72,7 +72,9 @@ const resourceSchema = new mongoose.Schema({
 const messageSchema = new mongoose.Schema({
   username: { type: String, required: true },
   message: { type: String, required: true },
-  timestamp: { type: Date, default: Date.now }
+  imageUrl: { type: String, default: '' }, // For image messages
+  timestamp: { type: Date, default: Date.now },
+  readBy: [{ type: String }] // Array of usernames who read the message
 })
 
 const User = mongoose.model('User', userSchema)
@@ -313,6 +315,34 @@ app.post('/api/messages', async (req, res) => {
     const message = new Message(req.body)
     await message.save()
     res.json(message)
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+// Mark message as read
+app.post('/api/messages/:id/read', async (req, res) => {
+  try {
+    const { username } = req.body
+    const message = await Message.findById(req.params.id)
+    if (message && !message.readBy.includes(username)) {
+      message.readBy.push(username)
+      await message.save()
+    }
+    res.json({ success: true })
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+// Get unread count
+app.get('/api/messages/unread/:username', async (req, res) => {
+  try {
+    const count = await Message.countDocuments({
+      username: { $ne: req.params.username },
+      readBy: { $ne: req.params.username }
+    })
+    res.json({ count })
   } catch (error) {
     res.status(500).json({ error: error.message })
   }

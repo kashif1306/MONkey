@@ -8,17 +8,17 @@ function Dashboard({ username }) {
   const [completions, setCompletions] = useState([])
   const [leaderboard, setLeaderboard] = useState([])
   const [daysRemaining, setDaysRemaining] = useState(0)
+  const [unreadCount, setUnreadCount] = useState(0)
 
   useEffect(() => {
     loadDashboard()
-    // Refresh dashboard every 3 seconds to see updates
     const interval = setInterval(loadDashboard, 3000)
     return () => clearInterval(interval)
   }, [username])
 
   const loadDashboard = async () => {
     try {
-      const allTasks = await api.getTasks() // Get ALL shared tasks
+      const allTasks = await api.getTasks()
       setTasks(allTasks)
 
       const userCompletions = await api.getCompletions(username)
@@ -26,6 +26,9 @@ function Dashboard({ username }) {
 
       const leaderboardData = await api.getLeaderboard(username)
       setLeaderboard(leaderboardData)
+
+      const unreadData = await api.getUnreadCount(username)
+      setUnreadCount(unreadData.count)
 
       setDaysRemaining(getDaysUntilWeekEnd())
     } catch (error) {
@@ -110,8 +113,36 @@ function Dashboard({ username }) {
       </div>
 
       <div className="card">
-        <h2>📊 Friend Activity</h2>
-        <p style={{ color: '#94a3b8' }}>Coming soon - see what friends completed today!</p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <h2 style={{ margin: 0 }}>📊 Quick Stats</h2>
+          {unreadCount > 0 && (
+            <a href="/chatroom" style={{ textDecoration: 'none' }}>
+              <div className="badge badge-unread">
+                {unreadCount} new message{unreadCount !== 1 ? 's' : ''}
+              </div>
+            </a>
+          )}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+          <div style={{ padding: '20px', background: 'var(--bg-tertiary)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+            <div style={{ fontSize: '32px', fontWeight: 'bold', color: 'var(--neon-yellow)' }}>
+              {leaderboard.find(u => u.username === username)?.points || 0}
+            </div>
+            <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Your Week Points</div>
+          </div>
+          <div style={{ padding: '20px', background: 'var(--bg-tertiary)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+            <div style={{ fontSize: '32px', fontWeight: 'bold', color: 'var(--neon-blue)' }}>
+              {completions.filter(c => c.date === getTodayString()).length}
+            </div>
+            <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Completed Today</div>
+          </div>
+          <div style={{ padding: '20px', background: 'var(--bg-tertiary)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+            <div style={{ fontSize: '32px', fontWeight: 'bold', color: 'var(--success)' }}>
+              {daysRemaining}
+            </div>
+            <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Days Until Winner</div>
+          </div>
+        </div>
       </div>
     </div>
   )

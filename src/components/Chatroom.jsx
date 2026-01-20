@@ -5,7 +5,10 @@ function Chatroom({ username }) {
   const [messages, setMessages] = useState([])
   const [newMessage, setNewMessage] = useState('')
   const [userProfiles, setUserProfiles] = useState({})
+  const [imagePreview, setImagePreview] = useState(null)
+  const [imageFile, setImageFile] = useState(null)
   const messagesEndRef = useRef(null)
+  const fileInputRef = useRef(null)
 
   useEffect(() => {
     loadMessages()
@@ -15,10 +18,23 @@ function Chatroom({ username }) {
 
   useEffect(() => {
     scrollToBottom()
+    markMessagesAsRead()
   }, [messages])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }
+
+  const markMessagesAsRead = async () => {
+    try {
+      for (const msg of messages) {
+        if (msg.username !== username && !msg.readBy?.includes(username)) {
+          await api.markMessageRead(msg._id, username)
+        }
+      }
+    } catch (error) {
+      console.error('Error marking messages as read:', error)
+    }
   }
 
   const loadMessages = async () => {
@@ -26,7 +42,6 @@ function Chatroom({ username }) {
       const data = await api.getMessages()
       setMessages(data)
       
-      // Load profile pics for all users
       const uniqueUsers = [...new Set(data.map(m => m.username))]
       for (const user of uniqueUsers) {
         if (!userProfiles[user]) {
@@ -43,13 +58,34 @@ function Chatroom({ username }) {
     }
   }
 
+  const handleImageSelect = (e) => {
+    const file = e.target.files[0]
+    if (file && file.type.startsWith('image/')) {
+      setImageFile(file)
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setImagePreview(reader.result)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const removeImage = () => {
+    setImagePreview(null)
+    setImageFile(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
   const sendMessage = async (e) => {
     e.preventDefault()
-    if (!newMessage.trim()) return
+    if (!newMessage.trim() && !imagePreview) return
 
     try {
-      await api.sendMessage(username, newMessage)
+      await api.sendMessage(username, newMessage || '📷 Image', imagePreview || '')
       setNewMessage('')
+      removeImage()
       loadMessages()
     } catch (error) {
       console.error('Error sending message:', error)
@@ -78,15 +114,23 @@ function Chatroom({ username }) {
   }
 
   const getProfilePic = (user) => {
-    return userProfiles[user]?.profilePic || '🐵'
+    const pic = userProfiles[user]?.profilePic
+    if (pic && pic.startsWith('data:image')) {
+      return <img src={pic} alt={user} />
+    }
+    return pic || '🐵'
   }
 
   return (
     <div className="container">
       <div className="chat-container">
         <div className="chat-header">
-          <h2>💬 Team Chat</h2>
-          <span className="chat-status">🟢 {messages.length} messages</span>
+          <h2>
+            💬 Team Chat
+          </h2>
+          <span className="chat-status">
+            🟢 {messages.length} messages
+          </span>
         </div>
         
         <div className="chat-messages">
@@ -116,7 +160,15 @@ function Chatroom({ username }) {
                       </div>
                     )}
                     <div className={`message-bubble ${isOwn ? 'bubble-own' : 'bubble-other'}`}>
-                      <p>{msg.message}</p>
+                      {msg.message && <p>{msg.message}</p>}
+                      {msg.imageUrl && (
+                        <img 
+                          src={msg.imageUrl} 
+                          alt="Shared" 
+                          className="message-image"
+                          onClick={() => window.open(msg.imageUrl, '_blank')}
+                        />
+                      )}
                       {isOwn && (
                         <button
                           onClick={() => deleteMessage(msg._id)}
@@ -141,15 +193,40 @@ function Chatroom({ username }) {
         </div>
 
         <form onSubmit={sendMessage} className="chat-input-form">
+          {imagePreview && (
+            <div className="image-preview">
+              <img src={imagePreview} alt="Preview" />
+              <button type="button" onClick={removeImage} className="image-preview-remove">
+                ×
+              </button>
+            </div>
+          )}
           <div className="chat-input-wrapper">
-            <input
-              type="text"
-              placeholder="Type a message..."
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              className="chat-input"
-            />
-            <button type="submit" className="chat-send-btn" disabled={!newMessage.trim()}>
+            <div className="chat-input-container">
+              <input
+                type="text"
+                placeholder="Type a message..."
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                className="chat-input"
+              />
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageSelect}
+                style={{ display: 'none' }}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="image-upload-btn"
+                title="Upload image"
+              >
+                📎
+              </button>
+            </div>
+            <button type="submit" className="chat-send-btn" disabled={!newMessage.trim() && !imagePreview}>
               <span>Send</span>
               <span className="send-icon">→</span>
             </button>
