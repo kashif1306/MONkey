@@ -332,11 +332,13 @@ app.get('/api/leaderboard/:username', async (req, res) => {
 
 // Test routes - MUST be before app.listen
 app.get('/api/test', (req, res) => {
+  console.log('✅ /api/test route hit')
   res.json({ message: 'Backend is working!', timestamp: new Date() })
 })
 
 app.get('/', (req, res) => {
-  res.json({ message: 'MONKey Backend API', status: 'running' })
+  console.log('✅ / route hit')
+  res.json({ message: 'MONKey Backend API', status: 'running', version: '1.0.1' })
 })
 
 const PORT = process.env.PORT || 3000
