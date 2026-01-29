@@ -512,6 +512,38 @@ app.get('/api/leaderboard/:username', async (req, res) => {
   }
 })
 
+// Hard Reset - Clear all progress
+app.post('/api/admin/reset', async (req, res) => {
+  try {
+    // Delete all completions
+    await Completion.deleteMany({})
+    
+    // Delete all activities
+    await Activity.deleteMany({})
+    
+    // Delete all messages
+    await Message.deleteMany({})
+    
+    // Reset all user statuses
+    await User.updateMany({}, { status: 'offline', lastActive: new Date() })
+    
+    console.log('🔄 HARD RESET: All progress cleared!')
+    
+    res.json({ 
+      success: true, 
+      message: 'All progress has been reset!',
+      cleared: {
+        completions: true,
+        activities: true,
+        messages: true,
+        userStatuses: true
+      }
+    })
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
 // Test routes - MUST be before app.listen
 app.get('/api/test', (req, res) => {
   console.log('✅ /api/test route hit')
