@@ -544,6 +544,38 @@ app.post('/api/admin/reset', async (req, res) => {
   }
 })
 
+// GET version for easy browser access
+app.get('/api/admin/reset', async (req, res) => {
+  try {
+    // Delete all completions
+    const completionsResult = await Completion.deleteMany({})
+    
+    // Delete all activities
+    const activitiesResult = await Activity.deleteMany({})
+    
+    // Delete all messages
+    const messagesResult = await Message.deleteMany({})
+    
+    // Reset all user statuses
+    await User.updateMany({}, { status: 'offline', lastActive: new Date() })
+    
+    console.log('🔄 HARD RESET: All progress cleared!')
+    
+    res.json({ 
+      success: true, 
+      message: 'All progress has been reset!',
+      cleared: {
+        completions: completionsResult.deletedCount,
+        activities: activitiesResult.deletedCount,
+        messages: messagesResult.deletedCount,
+        userStatuses: 'reset'
+      }
+    })
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
 // Test routes - MUST be before app.listen
 app.get('/api/test', (req, res) => {
   console.log('✅ /api/test route hit')
